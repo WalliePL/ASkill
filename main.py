@@ -292,7 +292,7 @@ class BaseGameExampleStrategy:
 
         if self.StateMachine == "Question":
             question =  self.questions.GetQuestion()
-            speech_output = "First question. " + self.CreateQuestion(question)
+            speech_output = "To answer use phrase, my answer is a or b. First question. " + self.CreateQuestion(question)
             should_end_session = False
 
             self.StateMachine = "Answer"
