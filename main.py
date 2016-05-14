@@ -80,8 +80,6 @@ def on_intent(intent_request, session):
             return handle_session_end_request()
         elif intent_name == "AnswearIntent":
             return on_intent.gameController.PlayGame(intent, session)
-        elif intent_name == "AnswearIntentB":
-            return get_welcome_response()
         elif intent_name == "StopIntent":
             return get_stop_response()
         else:
@@ -122,8 +120,6 @@ def cleanup():
     on_intent.gameStarted = False
     on_intent.gameController = None
         
-
-
 # --------------- Functions that control the skill's behavior ------------------
 
 
@@ -146,10 +142,10 @@ def get_stop_response():
     """ If we wanted to initialize the session to have some attributes we could
     add those here
     """
-
+    cleanup()
     session_attributes = {}
     card_title = "End"
-    speech_output = "Game stopped. "
+    speech_output = "Game stopped."
     # If the user either does not reply to the welcome message or says something
     # that is not understood, they will be prompted again with this text.
     reprompt_text = None
@@ -188,7 +184,6 @@ def get_color_from_session(intent, session):
     # understood, the session will end.
     return build_response(session_attributes, build_speechlet_response(
         intent['name'], speech_output, reprompt_text, should_end_session))
-
 
 def build_speechlet_response(title, output, reprompt_text, should_end_session):
     return {
@@ -229,15 +224,20 @@ class Questions:
     def __init__(self):
         self.Load()
 
-    def Load(self):
-        self.Players = []
-        self.Players.append(Question("Movie", "How many oscars did the Titanic movie got?", "Eleven", "Five"))
-        self.Players.append(Question("Movie", "How many Tomb Raider movies were made?", "Two", "Three"))
-        self.Players.append(Question("Movie", "Which malformation did Marilyn Monroe have when she was born?", "Six toes", "Wings"))
+    def Count(self):
+        return self.questions.__len__()
 
+    def Load(self):
+        self.questions = []
+        self.questions.append(Question("Movie", "How many oscars did the Titanic movie got?", "Eleven", "Five"))
+        self.questions.append(Question("Movie", "How many Tomb Raider movies were made?", "Two", "Three"))
+        self.questions.append(Question("Movie", "Which malformation did Marilyn Monroe have when she was born?", "Six toes", "Wings"))
+        
     def GetQuestion(self):
-        drawnQuestionId = 1
-        return self.Players[drawnQuestionId]
+        drawnQuestionId = random.randint(0, len(self.questions) - 1)
+        print (drawnQuestionId)
+        question = self.questions.pop(drawnQuestionId)
+        return question
 
 class Player:
     def __init__(self, startPoints = 0):
@@ -264,16 +264,21 @@ class GameConstroller:
 class BaseGameExampleStrategy:
     def __init__(self):
         self.StateMachine = "Question"
+        self.questions = Questions()
         
     def PlayGame(self, intent, session):
         session_attributes = {}
 
+        if (self.questions.Count() == 0):
+            speech_output = "No more questions" 
+            should_end_session = True
+            reprompt_text = None
+            cleanup()
+            return self.build_response(session_attributes, self.build_speechlet_response(intent['name'], speech_output, reprompt_text, should_end_session))
+
         if self.StateMachine == "Question":
-            questions = Questions()
-            question = questions.GetQuestion()
-
+            question =  self.questions.GetQuestion()
             speech_output = self.CreateQuestion(question)
-
             should_end_session = False
             reprompt_text = None
 
@@ -282,10 +287,13 @@ class BaseGameExampleStrategy:
         elif self.StateMachine == "Answer":
             if 'Answer' in intent['slots']:
                 answer = intent['slots']['Answer']['value']
-                speech_output = "Your answer is " + answer
+                question =  self.questions.GetQuestion()
+                questionoutput = self.CreateQuestion(question)
+
+                speech_output = "Your answer is Correct. Next question, " + questionoutput
                 should_end_session = False
-                reprompt_text = None
-                self.StateMachine = "Question"
+                reprompt_text = questionoutput
+        
                 return self.build_response(session_attributes,
                                            self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
                                                                          should_end_session))
@@ -297,8 +305,6 @@ class BaseGameExampleStrategy:
                 return self.build_response(session_attributes,
                                            self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
                                                                          should_end_session))
-
-
 
 
     def CreateQuestion(self, question):
