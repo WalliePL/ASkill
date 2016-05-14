@@ -69,28 +69,36 @@ def on_intent(intent_request, session):
     intent = intent_request['intent']
     intent_name = intent_request['intent']['name']
 
+    print (intent_name)
+    print (on_intent.gameStarted)
     # Dispatch to your skill's intent handlers
+    if (on_intent.gameController == None):
+        on_intent.gameController = InitializeGame()
+
     if on_intent.gameStarted:
         if intent_name == "AMAZON.CancelIntent" or intent_name == "AMAZON.StopIntent":
             return handle_session_end_request()
-        elif intent_name == "AnswearIntentA":
-            return get_welcome_response()
+        elif intent_name == "AnswearIntent":
+            return on_intent.gameController.PlayGame(intent, session)
         elif intent_name == "AnswearIntentB":
             return get_welcome_response()
         elif intent_name == "StopIntent":
             return get_stop_response()
         else:
-            raise ValueError("Invalid intent")
+            cleanup()
+            raise ValueError("Invalid intent when gameStarted true")
     else:
         if intent_name == "StartIntent":
             on_intent.gameStarted = True
-            return beginBaseQuiz(intent, session)
+            return on_intent.gameController.PlayGame(intent, session)
         elif intent_name == "StopIntent":
             return get_stop_response()
         else:
+            cleanup()
             raise ValueError("Invalid intent")
 
 on_intent.gameStarted = False
+on_intent.gameController = None
 
 def beginBaseQuiz(intent, session):
     gameController = InitializeGame()
@@ -108,6 +116,12 @@ def on_session_ended(session_ended_request, session):
     print("on_session_ended requestId=" + session_ended_request['requestId'] +
           ", sessionId=" + session['sessionId'])
     # add cleanup logic here
+    cleanup()
+
+def cleanup():
+    on_intent.gameStarted = False
+    on_intent.gameController = None
+        
 
 
 # --------------- Functions that control the skill's behavior ------------------
@@ -120,7 +134,7 @@ def get_welcome_response():
 
     session_attributes = {}
     card_title = "Welcome"
-    speech_output = "Welcome to the Alexa Trivia Game. Say start to begin game, end to exit"
+    speech_output = "Welcome to the Trivia Game. Say start to begin game, end to exit"
     # If the user either does not reply to the welcome message or says something
     # that is not understood, they will be prompted again with this text.
     reprompt_text = "Say start to begin game, end to exit"
@@ -248,18 +262,47 @@ class GameConstroller:
         print("EndGame")
 
 class BaseGameExampleStrategy:
-    def PlayGame(self, intent, session):
-        questions = Questions()
-        question = questions.GetQuestion()
-
-        session_attributes = {}
-        speech_output = question.question + "A," + question.rightAnswer + ", B, " + question.badAnswer
+    def __init__(self):
+        self.StateMachine = "Question"
         
-        should_end_session = False
-        reprompt_text = None
+    def PlayGame(self, intent, session):
+        session_attributes = {}
 
-        return self.build_response(session_attributes, self.build_speechlet_response(intent['name'], speech_output, reprompt_text, should_end_session))
+        if self.StateMachine == "Question":
+            questions = Questions()
+            question = questions.GetQuestion()
 
+            speech_output = self.CreateQuestion(question)
+
+            should_end_session = False
+            reprompt_text = None
+
+            self.StateMachine = "Answer"
+            return self.build_response(session_attributes, self.build_speechlet_response(intent['name'], speech_output, reprompt_text, should_end_session))
+        elif self.StateMachine == "Answer":
+            if 'Answer' in intent['slots']:
+                answer = intent['slots']['Answer']['value']
+                speech_output = "Your answer is " + answer
+                should_end_session = False
+                reprompt_text = None
+                self.StateMachine = "Question"
+                return self.build_response(session_attributes,
+                                           self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
+                                                                         should_end_session))
+
+            else:
+                speech_output = "You said unacceptable answer. You can answer by saying My answer is A or My answer is ."
+                reprompt_text = "You can answer by saying My answer is A or My answer is."
+                should_end_session = False
+                return self.build_response(session_attributes,
+                                           self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
+                                                                         should_end_session))
+
+
+
+
+    def CreateQuestion(self, question):
+        return question.question + "A," + question.rightAnswer + ", B, " + question.badAnswer
 
     def build_speechlet_response(self, title, output, reprompt_text, should_end_session):
         return {
@@ -280,7 +323,6 @@ class BaseGameExampleStrategy:
             },
             'shouldEndSession': should_end_session
         }
-
 
     def build_response(self, session_attributes, speechlet_response):
         return {
