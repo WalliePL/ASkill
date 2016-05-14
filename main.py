@@ -81,6 +81,8 @@ def on_intent(intent_request, session):
             return handle_session_end_request()
         elif intent_name == "AnswearIntent":
             return on_intent.gameController.PlayGame(intent, session)
+        elif intent_name == "RuleIntent":
+            return give_rule_response()
         elif intent_name == "StopIntent":
             return get_stop_response()
         else:
@@ -92,6 +94,8 @@ def on_intent(intent_request, session):
             return on_intent.gameController.PlayGame(intent, session)
         elif intent_name == "StopIntent":
             return get_stop_response()
+        elif intent_name == "RuleIntent":
+            return give_rule_response()
         else:
             cleanup()
             raise ValueError("Invalid intent")
@@ -99,6 +103,17 @@ def on_intent(intent_request, session):
 on_intent.gameStarted = False
 on_intent.gameController = None
 on_intent.goodAnwer = ''
+
+def give_rule_response():
+    session_attributes = {}
+    card_title = "Welcome"
+    speech_output = "To play trivia game you siply say start or begin. To answer the question you say, my answer is a or b. For every correct answer you will get point, but if you answer is wrong the game will end. At end You will get your socer. Have fun and good luck!"
+    # If the user either does not reply to the welcome message or says something
+    # that is not understood, they will be prompted again with this text.
+    reprompt_text = "Say start to begin game, end to exit."
+    should_end_session = False
+    return build_response(session_attributes, build_speechlet_response(
+        card_title, speech_output, reprompt_text, should_end_session))
 
 def beginBaseQuiz(intent, session):
     gameController = InitializeGame()
@@ -133,10 +148,10 @@ def get_welcome_response():
 
     session_attributes = {}
     card_title = "Welcome"
-    speech_output = "Welcome to the Trivia Game. Say start to begin game, end to exit"
+    speech_output = "Welcome to the Trivia Game. Say start to begin game, end to exit. For more information say how to play."
     # If the user either does not reply to the welcome message or says something
     # that is not understood, they will be prompted again with this text.
-    reprompt_text = "Say start to begin game, end to exit"
+    reprompt_text = "Say start to begin game, end to exit. For more information say how to play."
     should_end_session = False
     return build_response(session_attributes, build_speechlet_response(
         card_title, speech_output, reprompt_text, should_end_session))
