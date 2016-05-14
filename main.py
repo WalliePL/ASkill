@@ -10,6 +10,7 @@
 from __future__ import print_function
 
 import random
+import re
 
 """ from GameController import BaseGameExampleStrategy, GameConstroller
 """
@@ -97,6 +98,7 @@ def on_intent(intent_request, session):
 
 on_intent.gameStarted = False
 on_intent.gameController = None
+on_intent.goodAnwer = ''
 
 def beginBaseQuiz(intent, session):
     gameController = InitializeGame()
@@ -119,7 +121,8 @@ def on_session_ended(session_ended_request, session):
 def cleanup():
     on_intent.gameStarted = False
     on_intent.gameController = None
-        
+    on_intent.goodAnwer = ""
+
 # --------------- Functions that control the skill's behavior ------------------
 
 
@@ -232,7 +235,7 @@ class Questions:
         self.questions.append(Question("Movie", "How many oscars did the Titanic movie got?", "Eleven", "Five"))
         self.questions.append(Question("Movie", "How many Tomb Raider movies were made?", "Two", "Three"))
         self.questions.append(Question("Movie", "Which malformation did Marilyn Monroe have when she was born?", "Six toes", "Wings"))
-        
+
     def GetQuestion(self):
         drawnQuestionId = random.randint(0, len(self.questions) - 1)
         print (drawnQuestionId)
@@ -265,50 +268,82 @@ class BaseGameExampleStrategy:
     def __init__(self):
         self.StateMachine = "Question"
         self.questions = Questions()
+        self.score = 0
+
+    def CheckAnswer(self, receivedAnswer):
+        regex = re.compile('[^a-zA-Z]')
+        receivedAnswer = regex.sub('', receivedAnswer)
+        print(receivedAnswer.lower())
+        print(on_intent.goodAnwer.lower())
         
+        print(receivedAnswer.lower() == on_intent.goodAnwer.lower())
+        return receivedAnswer.lower() == on_intent.goodAnwer.lower()
+
     def PlayGame(self, intent, session):
         session_attributes = {}
+        reprompt_text = None
 
         if (self.questions.Count() == 0):
-            speech_output = "No more questions" 
+            self.endGame = True
+            speech_output = self.validateAnswer(intent) + ". Your score is" + str(self.score) + ". No more questions. Game finished"
             should_end_session = True
-            reprompt_text = None
             cleanup()
             return self.build_response(session_attributes, self.build_speechlet_response(intent['name'], speech_output, reprompt_text, should_end_session))
 
         if self.StateMachine == "Question":
             question =  self.questions.GetQuestion()
-            speech_output = self.CreateQuestion(question)
+            speech_output = "First question. " + self.CreateQuestion(question)
             should_end_session = False
-            reprompt_text = None
 
             self.StateMachine = "Answer"
             return self.build_response(session_attributes, self.build_speechlet_response(intent['name'], speech_output, reprompt_text, should_end_session))
         elif self.StateMachine == "Answer":
-            if 'Answer' in intent['slots']:
-                answer = intent['slots']['Answer']['value']
+            self.endGame = False
+            speech_output = self.validateAnswer(intent)
+            if(not self.endGame):
                 question =  self.questions.GetQuestion()
                 questionoutput = self.CreateQuestion(question)
-
-                speech_output = "Your answer is Correct. Next question, " + questionoutput
                 should_end_session = False
                 reprompt_text = questionoutput
-        
-                return self.build_response(session_attributes,
-                                           self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
-                                                                         should_end_session))
-
+                speech_output = speech_output + ". Next question, " + questionoutput
             else:
-                speech_output = "You said unacceptable answer. You can answer by saying My answer is A or My answer is ."
-                reprompt_text = "You can answer by saying My answer is A or My answer is."
-                should_end_session = False
-                return self.build_response(session_attributes,
-                                           self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
-                                                                         should_end_session))
+                speech_output = speech_output + ". Your score is" + str(self.score)
+                should_end_session = True
+                cleanup()
+
+            return self.build_response(session_attributes,
+                                       self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
+                                                                     should_end_session))
+
+        else:
+            speech_output = "You said unacceptable answer. You can answer by saying My answer is A or My answer is ."
+            reprompt_text = "You can answer by saying My answer is A or My answer is."
+            should_end_session = False
+            return self.build_response(session_attributes,
+                                       self.build_speechlet_response(intent['name'], speech_output, reprompt_text,
+                                                                     should_end_session))
+    def validateAnswer(self, intent):
+        if 'Answer' in intent['slots']:
+            answer = intent['slots']['Answer']['value']
+            print("value " + answer)
+            if(self.CheckAnswer(answer) == True):
+                result = "Correct"
+                self.score = self.score + 1
+            else:
+                self.endGame = True
+                result = "Incorrect"
+
+            return "Your answer is "+result
 
 
     def CreateQuestion(self, question):
-        return question.question + "A," + question.rightAnswer + ", B, " + question.badAnswer
+        firstOption = random.randint(0, 1)
+        if firstOption:
+            on_intent.goodAnwer = "a"
+            return question.question + "A," + question.rightAnswer + ", B, " + question.badAnswer
+        else:
+            on_intent.goodAnwer = "b"
+            return question.question + "A," + question.badAnswer + ", B, " + question.rightAnswer
 
     def build_speechlet_response(self, title, output, reprompt_text, should_end_session):
         return {
